@@ -20,6 +20,7 @@ import com.lagradost.cloudstream3.newMovieSearchResponse
 import com.lagradost.cloudstream3.newSearchResponseList
 import com.lagradost.cloudstream3.newSubtitleFile
 import com.lagradost.cloudstream3.runAllAsync
+import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Document
@@ -110,7 +111,7 @@ class JAVHDProvider : MainAPI() {
         runAllAsync(
             {
                 val episodeList = doc.select(".button_style .button_choice_server")
-                    episodeList.forEach { item ->
+                    episodeList.amap { item ->
                     val link = item.attr("data-embed")
                     loadExtractor(base64Decode(link),subtitleCallback,callback)
                 }
