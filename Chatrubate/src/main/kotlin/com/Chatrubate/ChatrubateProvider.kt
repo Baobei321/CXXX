@@ -99,7 +99,7 @@ class ChatrubateProvider : MainAPI() {
             val script = doc.select("script").find { item-> item.html().contains("window.initialRoomDossier") }
             
             if (script == null) {
-                logError("Script with window.initialRoomDossier not found")
+                logError(Exception("Script with window.initialRoomDossier not found"))
                 return false
             }
             
@@ -107,7 +107,7 @@ class ChatrubateProvider : MainAPI() {
             val m3u8Url = "\"hls_source\": \"(.*).m3u8\"".toRegex().find(json)?.groups?.get(1)?.value
             
             if (m3u8Url.isNullOrEmpty()) {
-                logError("m3u8Url not found in JSON")
+                logError(Exception("m3u8Url not found in JSON"))
                 return false
             }
             
