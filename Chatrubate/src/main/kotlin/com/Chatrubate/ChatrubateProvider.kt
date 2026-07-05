@@ -33,7 +33,16 @@ class ChatrubateProvider : MainAPI() {
             {
                 offset = 90 * (page - 1)
             }
-            val responseList = app.get("$mainUrl${request.data}&offset=$offset").parsedSafe<Response>()?.rooms?.map { room ->
+            
+            val url = "$mainUrl${request.data}&offset=$offset"
+            val response = try {
+                app.get(url).parsedSafe<Response>()
+            } catch (e: Exception) {
+                logError(Exception("Error fetching from $url: ${e.message}"))
+                null
+            }
+            
+            val responseList = response?.rooms?.map { room ->
                 newLiveSearchResponse(
                     name      = room.username,
                     url       = "$mainUrl/${room.username}",
@@ -43,6 +52,11 @@ class ChatrubateProvider : MainAPI() {
                     this.lang      = null
                 }
             } ?: emptyList()
+            
+            if (responseList.isEmpty()) {
+                logError(Exception("No rooms found for category: ${request.name}. Response: $response"))
+            }
+            
             return newHomePageResponse(HomePageList(request.name, responseList, isHorizontalImages = true),hasNext = true)
 
     }
@@ -52,7 +66,15 @@ class ChatrubateProvider : MainAPI() {
         val searchResponse = mutableListOf<LiveSearchResponse>()
 
         for (i in 0..3) {
-            val results = app.get("$mainUrl/api/ts/roomlist/room-list/?hashtags=$query&limit=90&offset=${i*90}").parsedSafe<Response>()?.rooms?.map { room ->
+            val url = "$mainUrl/api/ts/roomlist/room-list/?hashtags=$query&limit=90&offset=${i*90}"
+            val response = try {
+                app.get(url).parsedSafe<Response>()
+            } catch (e: Exception) {
+                logError(Exception("Error searching: ${e.message}"))
+                null
+            }
+            
+            val results = response?.rooms?.map { room ->
                 newLiveSearchResponse(
                     name      = room.username,
                     url       = "$mainUrl/${room.username}",
@@ -62,6 +84,7 @@ class ChatrubateProvider : MainAPI() {
                     this.lang = null
                 }
             } ?: emptyList()
+            
             if (!searchResponse.containsAll(results)) {
                 searchResponse.addAll(results)
             } else {
