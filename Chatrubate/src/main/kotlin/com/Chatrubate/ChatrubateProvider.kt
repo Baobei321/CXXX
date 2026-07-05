@@ -33,7 +33,7 @@ class ChatrubateProvider : MainAPI() {
             {
                 offset = 90 * (page - 1)
             }
-            val responseList = app.get("$mainUrl${request.data}&offset=$offset").parsedSafe<Response>()!!.rooms.map { room ->
+            val responseList = app.get("$mainUrl${request.data}&offset=$offset").parsedSafe<Response>()?.rooms?.map { room ->
                 newLiveSearchResponse(
                     name      = room.username,
                     url       = "$mainUrl/${room.username}",
@@ -42,7 +42,7 @@ class ChatrubateProvider : MainAPI() {
                     this.posterUrl = room.img
                     this.lang      = null
                 }
-            }
+            } ?: emptyList()
             return newHomePageResponse(HomePageList(request.name, responseList, isHorizontalImages = true),hasNext = true)
 
     }
@@ -52,7 +52,7 @@ class ChatrubateProvider : MainAPI() {
         val searchResponse = mutableListOf<LiveSearchResponse>()
 
         for (i in 0..3) {
-            val results = app.get("$mainUrl/api/ts/roomlist/room-list/?hashtags=$query&limit=90&offset=${i*90}").parsedSafe<Response>()!!.rooms.map { room ->
+            val results = app.get("$mainUrl/api/ts/roomlist/room-list/?hashtags=$query&limit=90&offset=${i*90}").parsedSafe<Response>()?.rooms?.map { room ->
                 newLiveSearchResponse(
                     name      = room.username,
                     url       = "$mainUrl/${room.username}",
@@ -61,7 +61,7 @@ class ChatrubateProvider : MainAPI() {
                     this.posterUrl = room.img
                     this.lang = null
                 }
-            }
+            } ?: emptyList()
             if (!searchResponse.containsAll(results)) {
                 searchResponse.addAll(results)
             } else {
@@ -78,7 +78,7 @@ class ChatrubateProvider : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
 
-        val title = document.selectFirst("meta[property=og:title]")?.attr("content")?.trim().toString().replace("| PornHoarder.tv","")
+        val title = document.selectFirst("meta[property=og:title]")?.attr("content")?.trim() ?: "Unknown"
         val poster = fixUrlNull(document.selectFirst("[property='og:image']")?.attr("content"))
         val description = document.selectFirst("meta[property=og:description]")?.attr("content")?.trim()
     
@@ -94,7 +94,7 @@ class ChatrubateProvider : MainAPI() {
     }
 
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
-        try {
+        return try {
             val doc = app.get(data).document
             val script = doc.select("script").find { item-> item.html().contains("window.initialRoomDossier") }
             
@@ -103,8 +103,16 @@ class ChatrubateProvider : MainAPI() {
                 return false
             }
             
-            val json = script.html().substringAfter("window.initialRoomDossier = \"").substringBefore(";").unescapeUnicode()
-            val m3u8Url = "\"hls_source\": \"(.*).m3u8\"".toRegex().find(json)?.groups?.get(1)?.value
+            val scriptHtml = script.html()
+            val json = scriptHtml.substringAfter("window.initialRoomDossier = \"").substringBefore(";")
+            
+            if (json.isEmpty()) {
+                logError(Exception("Failed to extract JSON from script"))
+                return false
+            }
+            
+            val unescapedJson = json.unescapeUnicode()
+            val m3u8Url = "\"hls_source\"\\s*:\\s*\"([^\"]+\\.m3u8)\"".toRegex().find(unescapedJson)?.groupValues?.get(1)
             
             if (m3u8Url.isNullOrEmpty()) {
                 logError(Exception("m3u8Url not found in JSON"))
@@ -115,16 +123,15 @@ class ChatrubateProvider : MainAPI() {
                 newExtractorLink(
                     source = name,
                     name = name,
-                    url = "$m3u8Url.m3u8",
+                    url = m3u8Url,
                     type = ExtractorLinkType.M3U8
                 )
             )
+            true
         } catch (e: Exception) {
             logError(e)
-            return false
+            false
         }
-
-        return true
     }
 
     data class Room(
@@ -143,6 +150,13 @@ class ChatrubateProvider : MainAPI() {
     )
 }
 
-fun String.unescapeUnicode() = replace("\\\\u([0-9A-Fa-f]{4})".toRegex()) {
-    String(Character.toChars(it.groupValues[1].toInt(radix = 16)))
+fun String.unescapeUnicode(): String {
+    return try {
+        replace("\\\\u([0-9A-Fa-f]{4})".toRegex()) { match ->
+            val code = match.groupValues[1].toIntOrNull(radix = 16) ?: return@replace match.value
+            String(Character.toChars(code))
+        }
+    } catch (e: Exception) {
+        this
+    }
 }
